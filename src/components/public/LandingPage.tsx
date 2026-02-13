@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { getEpaperByDate, Epaper } from "../../api/epaper.api";
-import { useToast } from "../../context/ToastContext";
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,19 +10,19 @@ import {
   Maximize,
   Minimize,
 } from "lucide-react";
-import api from "../../api/api";
 
 export default function PublicLandingPage() {
-  const { showToast } = useToast();
+  const navigate = useNavigate();
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const dateInputRef = useRef<HTMLInputElement | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [epaper, setEpaper] = useState<Epaper | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [redirectAttempted, setRedirectAttempted] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -77,90 +77,35 @@ export default function PublicLandingPage() {
     }
   }
 
-  // loadEpaper: try selected date; if none, fallback to latest published
   async function loadEpaper(date: Date) {
     setLoading(true);
-    setError(null);
+    setRedirectAttempted(false);
 
     const formattedDate = format(date, "yyyy-MM-dd");
 
     try {
-      // Attempt 1: fetch epaper by selected date
-      try {
-        const data = await getEpaperByDate(formattedDate);
-        if (data) {
-          setEpaper(data);
-          setCurrentPage(0);
+      const data = await getEpaperByDate(formattedDate);
+      setEpaper(data);
+      setCurrentPage(0);
+    } catch (err) {
+      console.info("No ePaper for date:", formattedDate, err);
+      setEpaper(null);
 
-          // Only update selectedDate if the API-normalized date actually differs
-          const apiDateStr = format(new Date(data.date), "yyyy-MM-dd");
-          if (apiDateStr !== formattedDate) {
-            setSelectedDate(new Date(data.date));
-          }
-          return;
-        }
-      } catch (err) {
-        // No epaper for the date — we'll fallback to latest below
-        console.info("No ePaper for date:", formattedDate, err);
-      }
-
-      // Attempt 2: fetch latest published ePaper (fallback)
-      try {
-        const resp = await api.get("/epapers", {
-          params: { page: 1, limit: 1, status: "published" },
-        });
-
-        const latest = resp?.data?.epapers?.[0] as Epaper | undefined;
-        if (latest) {
-          setEpaper(latest);
-          setCurrentPage(0);
-
-          // Only update selectedDate if different to avoid reruns
-          const latestDateStr = format(new Date(latest.date), "yyyy-MM-dd");
-          if (latestDateStr !== formattedDate) {
-            setSelectedDate(new Date(latest.date));
-          }
-
-          showToast({
-            variant: "info",
-            title: "Showing latest edition",
-            message:
-              "No edition found for the selected date — displaying the latest published ePaper.",
-          });
-          return;
-        } else {
-          // No published epaper at all
-          setEpaper(null);
-          setError("No published ePaper available");
-          showToast({
-            variant: "error",
-            title: "No ePaper",
-            message: "No published ePaper is currently available.",
-          });
-        }
-      } catch (err2) {
-        console.error("Failed to fetch latest ePaper:", err2);
-        setError("Failed to fetch latest ePaper");
-        showToast({
-          variant: "error",
-          title: "Error",
-          message: "Unable to fetch ePapers at this time.",
-        });
+      if (!redirectAttempted && window.location.pathname !== "/404") {
+        setRedirectAttempted(true);
+        navigate("/404", { replace: true });
       }
     } finally {
       setLoading(false);
     }
   }
-  const pageRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll to top when currentPage changes
   useEffect(() => {
     if (pageRef.current) {
       pageRef.current.scrollTop = 0;
     }
   }, [currentPage]);
 
-  // call loadEpaper when selectedDate changes
   useEffect(() => {
     loadEpaper(selectedDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,21 +122,18 @@ export default function PublicLandingPage() {
     return () => document.removeEventListener("fullscreenchange", handleExit);
   }, []);
 
-  if (loading) return <div className="p-6 text-center">Loading ePaper...</div>;
-
-  if (error) {
-    return <div className="p-6 text-center text-red-600">{error}</div>;
-  }
-
-  if (!epaper) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">No newspaper available</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-700 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading ePaper...</p>
         </div>
       </div>
     );
   }
+
+  if (!epaper) return null;
 
   const totalPages = epaper.images?.length || 0;
 
@@ -272,22 +214,12 @@ export default function PublicLandingPage() {
         </div>
       </div>
 
-      {/* ================= MAIN VIEWER ================= */}
+      {/* ================= MAIN VIEWER (no arrows inside) ================= */}
       <main
         ref={viewerRef}
         className="max-w-[1300px] mx-auto bg-white shadow flex mt-4 h-[calc(100vh-140px)]"
       >
-        {currentPage > 0 && (
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2
-               p-2 bg-white/80 rounded-full shadow hover:bg-white z-10"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-        )}
-
-        {/* Thumbnails */}
+        {/* Thumbnails sidebar */}
         <aside className="hidden sm:block w-28 overflow-y-auto border-r bg-white p-2">
           {epaper.images?.map((img, idx) => (
             <button
@@ -309,7 +241,7 @@ export default function PublicLandingPage() {
           ))}
         </aside>
 
-        {/* Main Page */}
+        {/* Main page */}
         <section ref={pageRef} className="flex-1 bg-white overflow-y-auto">
           {totalPages > 0 ? (
             <img
@@ -321,19 +253,28 @@ export default function PublicLandingPage() {
             <div className="p-6 text-center">No pages available</div>
           )}
         </section>
-
-        {currentPage < totalPages - 1 && (
-          <button
-            onClick={() =>
-              setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
-            }
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2
-               p-2 bg-white/80 rounded-full shadow hover:bg-white z-10"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-        )}
       </main>
+
+      {/* ================= FLOATING NAVIGATION ARROWS (outside the paper) ================= */}
+      {currentPage > 0 && (
+        <button
+          onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+          className="fixed left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 rounded-full shadow-lg hover:bg-white z-20"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="w-6 h-6 text-gray-800" />
+        </button>
+      )}
+
+      {currentPage < totalPages - 1 && (
+        <button
+          onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+          className="fixed right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 rounded-full shadow-lg hover:bg-white z-20"
+          aria-label="Next page"
+        >
+          <ChevronRight className="w-6 h-6 text-gray-800" />
+        </button>
+      )}
     </div>
   );
 }
