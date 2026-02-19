@@ -364,13 +364,24 @@ export async function getEpaperByDate(date: string): Promise<Epaper> {
     throw new Error(extractErrorMessage(err));
   }
 }
+// ---------- GET LATEST EPAPER DATE ----------
+export async function getLatestEpaperDate(): Promise<string> {
+  try {
+    const res = await api.get("/epapers/latest-date");
+    // Expected response: { date: "YYYY-MM-DD" }
+    return res.data.date;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
 
-// ---------- DEFAULT EXPORT ----------
+// Don't forget to add it to the default export at the bottom
 export default {
   createEpaper,
   getAllEpapers,
   getEpaperById,
   getEpaperByDate,
+  getLatestEpaperDate, // <-- add here
   updateEpaper,
   reorderEpaperImages,
   deleteEpaper,

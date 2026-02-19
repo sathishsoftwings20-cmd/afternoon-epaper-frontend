@@ -1,7 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { getEpaperByDate, Epaper } from "../../api/epaper.api";
+import {
+  getEpaperByDate,
+  getLatestEpaperDate,
+  Epaper,
+} from "../../api/epaper.api";
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,7 +26,6 @@ export default function PublicLandingPage() {
   const [epaper, setEpaper] = useState<Epaper | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -79,24 +82,39 @@ export default function PublicLandingPage() {
 
   async function loadEpaper(date: Date) {
     setLoading(true);
-    setRedirectAttempted(false);
 
     const formattedDate = format(date, "yyyy-MM-dd");
+    console.log("Loading ePaper for date:", formattedDate);
 
     try {
       const data = await getEpaperByDate(formattedDate);
+      console.log("ePaper loaded:", data);
       setEpaper(data);
       setCurrentPage(0);
+      setLoading(false); // success, stop loading
     } catch (err) {
       console.info("No ePaper for date:", formattedDate, err);
       setEpaper(null);
 
-      if (!redirectAttempted && window.location.pathname !== "/404") {
-        setRedirectAttempted(true);
+      try {
+        const latestDateStr = await getLatestEpaperDate();
+
+        if (latestDateStr) {
+          const latestFormatted = format(new Date(latestDateStr), "yyyy-MM-dd");
+
+          if (latestFormatted !== formattedDate) {
+            setSelectedDate(new Date(latestFormatted));
+            return;
+          }
+        }
+        console.log("Latest date from API:", latestDateStr);
+
+        // If no latest date found
+        navigate("/404", { replace: true });
+      } catch (latestErr) {
+        console.error("Failed to fetch latest ePaper date:", latestErr);
         navigate("/404", { replace: true });
       }
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -214,7 +232,7 @@ export default function PublicLandingPage() {
         </div>
       </div>
 
-      {/* ================= MAIN VIEWER (no arrows inside) ================= */}
+      {/* ================= MAIN VIEWER ================= */}
       <main
         ref={viewerRef}
         className="max-w-[1300px] mx-auto bg-white shadow flex mt-4 h-[calc(100vh-140px)]"
@@ -255,7 +273,7 @@ export default function PublicLandingPage() {
         </section>
       </main>
 
-      {/* ================= FLOATING NAVIGATION ARROWS (outside the paper) ================= */}
+      {/* ================= FLOATING NAVIGATION ARROWS ================= */}
       {currentPage > 0 && (
         <button
           onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
