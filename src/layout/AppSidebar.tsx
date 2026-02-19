@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
         name: "Add New Epaper",
         path: "/admin-dashboard/epapers/create",
         pro: false,
-        allowedRoles: ["SuperAdmin", "Admin"], // only Admins & SuperAdmin can create
+        allowedRoles: ["SuperAdmin", "Admin", "Staff"], // only Admins & SuperAdmin can create
       },
       {
         name: "All Epaper",
@@ -76,13 +76,13 @@ const AppSidebar: React.FC = () => {
   // track open submenu
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
-    {}
+    {},
   );
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isActive = useCallback(
     (path: string) => location.pathname === path,
-    [location.pathname]
+    [location.pathname],
   );
 
   /** Helper: whether the current user has access to a nav item/sub-item */
@@ -288,8 +288,8 @@ const AppSidebar: React.FC = () => {
           isExpanded || isMobileOpen
             ? "w-[290px]"
             : isHovered
-            ? "w-[290px]"
-            : "w-[90px]"
+              ? "w-[290px]"
+              : "w-[90px]"
         }
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}
